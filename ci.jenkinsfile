@@ -1,0 +1,31 @@
+pipeline{
+    agent any
+    stages{
+        stage('source'){
+            steps{
+                echo 'Cloning...'
+                git clone:${GIT_REPO}
+                
+            }
+        }
+        stage('build'){
+            steps{
+                echo 'Building...'
+                sh 'python -m pip install -r requirements.txt'
+                sh 'sudo docker build -t nagababudock123/python-automation-program .'
+            }
+        }
+        stage('test'){
+            steps{
+                echo 'Testing...'
+                sh 'sudo docker run python-automation-program python -m unittest discover tests'
+            }
+        }
+        stage('deploy'){
+            steps{
+                echo 'Deploying...'
+                sh 'sudo docker run -d -p 5000:5000 python-automation-program'
+            }
+        }   
+    }
+}
