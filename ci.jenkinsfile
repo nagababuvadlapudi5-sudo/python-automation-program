@@ -1,6 +1,9 @@
 pipeline{
     agent any
-    stages{
+environment {
+    GIT_REPO = 'https://github.com/nagababuvadlapudi5-sudo/python-automation-program.git'
+}
+ stages{
         stage('source'){
             steps{
                 echo 'Cloning...'
