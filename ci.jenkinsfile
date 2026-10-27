@@ -3,51 +3,50 @@ pipeline {
 
     environment {
         GIT_REPO = 'https://github.com/nagababuvadlapudi5-sudo/python-automation-program.git'
-        IMAGE_NAME = 'YOUR_DOCKERHUB_USERNAME/python-automation-program:latest'
     }
 
     stages {
         stage('Checkout') {
             steps {
-                echo 'Cloning repository...'
+                echo 'Checking out GitHub repository...'
                 git branch: 'main', url: "${GIT_REPO}"
             }
         }
 
-        stage('Build') {
+        stage('Build, Push and Test') {
             steps {
-                echo 'Building Docker image...'
-                sh 'docker build -t "$IMAGE_NAME" .'
-            }
-        }
-
-        stage('Docker Hub Login and Push') {
-            steps {
-                echo 'Logging in to Docker Hub...'
-
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'dockerhub-credentials',
+                        credentialsId: 'docker-hub-credentials',
                         usernameVariable: 'DOCKER_USERNAME',
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
                 ]) {
+                    script {
+                        env.IMAGE_NAME = "${DOCKER_USERNAME}/python-automation-program:latest"
+                    }
+
+                    echo 'Building Docker image...'
+
+                    sh 'docker build -t "$IMAGE_NAME" .'
+
+                    echo 'Logging in to Docker Hub...'
+
                     sh '''
                         echo "$DOCKER_PASSWORD" |
                             docker login -u "$DOCKER_USERNAME" --password-stdin
-
-                        docker push "$IMAGE_NAME"
-
-                        docker logout
                     '''
-                }
-            }
-        }
 
-        stage('Test') {
-            steps {
-                echo 'Running unit tests...'
-                sh 'docker run --rm "$IMAGE_NAME" python -m unittest discover -s tests'
+                    echo 'Pushing Docker image...'
+
+                    sh 'docker push "$IMAGE_NAME"'
+
+                    echo 'Running unit tests...'
+
+                    sh 'docker run --rm "$IMAGE_NAME" python -m unittest discover -s tests'
+
+                    sh 'docker logout'
+                }
             }
         }
 
@@ -55,14 +54,26 @@ pipeline {
             steps {
                 echo 'Deploying application...'
 
-                sh '''
-                    docker rm -f python-automation-container || true
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'docker-hub-credentials',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+                    script {
+                        env.IMAGE_NAME = "${DOCKER_USERNAME}/python-automation-program:latest"
+                    }
 
-                    docker run -d \
-                        --name python-automation-container \
-                        -p 5000:5000 \
-                        "$IMAGE_NAME"
-                '''
+                    sh '''
+                        docker rm -f python-automation-container || true
+
+                        docker run -d \
+                            --name python-automation-container \
+                            -p 5000:5000 \
+                            "$IMAGE_NAME"
+                    '''
+                }
             }
         }
     }
