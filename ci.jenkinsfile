@@ -14,8 +14,10 @@ environment {
         stage('build'){
             steps{
                 echo 'Building...'
-                sh 'python -m pip install -r requirements.txt'
-                sh 'sudo docker build -t nagababudock123/python-automation-program .'
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    sh 'sudo docker build -t python-automation-program .'
+                    sh 'sudo docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD'
+                    sh 'sudo docker push python-automation-program'
             }
         }
         stage('test'){
@@ -31,4 +33,5 @@ environment {
             }
         }   
     }
+}
 }
