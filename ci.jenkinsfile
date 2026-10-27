@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
 
@@ -11,7 +10,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo 'Cloning repository...'
-                git url: "${GIT_REPO}"
+                git branch: 'main', url: "${GIT_REPO}"
             }
         }
 
