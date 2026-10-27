@@ -17,7 +17,7 @@ pipeline {
         stage('Build') {
             steps {
                 echo 'Building Docker image...'
-                sh 'sudo docker build -t "$IMAGE_NAME" .'
+                sh 'docker build -t "$IMAGE_NAME" .'
             }
         }
 
@@ -34,11 +34,11 @@ pipeline {
                 ]) {
                     sh '''
                         echo "$DOCKER_PASSWORD" |
-                            sudo docker login -u "$DOCKER_USERNAME" --password-stdin
+                            docker login -u "$DOCKER_USERNAME" --password-stdin
 
-                        sudo docker push "$IMAGE_NAME"
+                        docker push "$IMAGE_NAME"
 
-                        sudo docker logout
+                        docker logout
                     '''
                 }
             }
@@ -47,7 +47,7 @@ pipeline {
         stage('Test') {
             steps {
                 echo 'Running unit tests...'
-                sh 'sudo docker run --rm "$IMAGE_NAME" python -m unittest discover -s tests'
+                sh 'docker run --rm "$IMAGE_NAME" python -m unittest discover -s tests'
             }
         }
 
@@ -56,9 +56,9 @@ pipeline {
                 echo 'Deploying application...'
 
                 sh '''
-                    sudo docker rm -f python-automation-container || true
+                    docker rm -f python-automation-container || true
 
-                    sudo docker run -d \
+                    docker run -d \
                         --name python-automation-container \
                         -p 5000:5000 \
                         "$IMAGE_NAME"
