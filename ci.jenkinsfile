@@ -1,6 +1,7 @@
 pipeline {
 agent any
 
+```
 options {
     skipDefaultCheckout(true)
     timeout(time: 30, unit: 'MINUTES')
@@ -13,21 +14,25 @@ environment {
 }
 
 stages {
+
     stage('Checkout') {
         steps {
             echo 'Checking out source code...'
+
             git branch: 'main', url: "${GIT_REPO}"
         }
     }
 
     stage('Unit Testing') {
         steps {
-            echo 'Installing python dependencies...'
+            echo 'Installing dependencies and running Python tests...'
+
             sh '''
-                python3 -m pip install --user -t requirements.txt
-                
-                echo "Running python unit tests......."
-                python3 -m unittest discover -s . -p "test_*.py" -v
+                docker run --rm \
+                    -v "$WORKSPACE:/app" \
+                    -w /app \
+                    python:3.12-slim \
+                    sh -c "pip install --no-cache-dir -r requirements.txt && python -m unittest discover -s . -p 'test_*.py' -v"
             '''
         }
     }
@@ -54,7 +59,7 @@ stages {
 
     stage('Docker Push') {
         steps {
-            echo 'Pushing Docker image to Docker Hub...'
+            echo 'Pushing images to Docker Hub...'
 
             withCredentials([
                 usernamePassword(
@@ -65,13 +70,15 @@ stages {
             ]) {
                 sh '''
                     set -e
+
+                    trap 'docker logout >/dev/null 2>&1 || true' EXIT
+
                     echo "$DOCKER_PASSWORD" | docker login \
                         -u "$DOCKER_USERNAME" --password-stdin
 
                     docker push "$DOCKER_USERNAME/$IMAGE_REPO:latest"
-                    docker push "$DOCKER_USERNAME/$IMAGE_REPO:$BUILD_NUMBER"
 
-                    docker logout
+                    docker push "$DOCKER_USERNAME/$IMAGE_REPO:$BUILD_NUMBER"
                 '''
             }
         }
@@ -91,6 +98,8 @@ stages {
                 sh '''
                     set -e
 
+                    trap 'docker logout >/dev/null 2>&1 || true' EXIT
+
                     echo "$DOCKER_PASSWORD" | docker login \
                         -u "$DOCKER_USERNAME" --password-stdin
 
@@ -104,11 +113,17 @@ stages {
                         -p 5000:5000 \
                         "$DOCKER_USERNAME/$IMAGE_REPO:latest"
 
-                    docker ps
-                    docker port "$CONTAINER_NAME"
-                    docker logs --tail 20 "$CONTAINER_NAME"
+                    echo "Checking container status..."
 
-                    docker logout
+                    docker ps
+
+                    echo "Checking port mapping..."
+
+                    docker port "$CONTAINER_NAME"
+
+                    echo "Checking application logs..."
+
+                    docker logs --tail 20 "$CONTAINER_NAME"
                 '''
             }
         }
@@ -117,17 +132,18 @@ stages {
 
 post {
     success {
-        echo 'CI/CD pipeline completed successfully!'
+        echo 'CI/CD Pipeline completed successfully!'
+        echo 'Application deployed successfully on EC2.'
     }
 
     failure {
-        echo 'CI/CD pipeline failed. Check console output.'
+        echo 'Pipeline failed. Check Console Output.'
     }
 
     always {
         echo 'Pipeline execution finished.'
     }
 }
-
+```
 
 }
