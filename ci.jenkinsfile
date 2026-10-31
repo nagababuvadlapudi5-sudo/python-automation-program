@@ -1,20 +1,45 @@
 pipeline {
     agent any
 
+    options {
+        skipDefaultCheckout(true)
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
     environment {
         GIT_REPO = 'https://github.com/nagababuvadlapudi5-sudo/python-automation-program.git'
+        IMAGE_REPO = 'python-automation-program'
+        CONTAINER_NAME = 'python-automation-container'
     }
 
     stages {
+
+        // STAGE 1: CHECKOUT
         stage('Checkout') {
             steps {
                 echo 'Checking out GitHub repository...'
+
                 git branch: 'main', url: "${GIT_REPO}"
             }
         }
 
-        stage('Build, Push and Test') {
+        // STAGE 2: UNIT TESTING
+        stage('Unit Testing') {
             steps {
+                echo 'Running Python unit tests...'
+
+                sh '''
+                    python3 --version
+                    python3 -m unittest discover -s . -p "test_*.py" -v
+                '''
+            }
+        }
+
+        // STAGE 3: DOCKER BUILD
+        stage('Docker Build') {
+            steps {
+                echo 'Building Docker image...'
+
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'dockerhub-credentials',
@@ -22,37 +47,19 @@ pipeline {
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
                 ]) {
-                    script {
-                        env.IMAGE_NAME = "${DOCKER_USERNAME}/python-automation-program:latest"
-                    }
-
-                    echo 'Building Docker image...'
-
-                    sh 'docker build -t "$IMAGE_NAME" .'
-
-                    echo 'Logging in to Docker Hub...'
-
                     sh '''
-                        echo "$DOCKER_PASSWORD" |
-                            docker login -u "$DOCKER_USERNAME" --password-stdin
+                        docker build \
+                            -t "$DOCKER_USERNAME/$IMAGE_REPO:latest" \
+                            -t "$DOCKER_USERNAME/$IMAGE_REPO:$BUILD_NUMBER" .
                     '''
-
-                    echo 'Pushing Docker image...'
-
-                    sh 'docker push "$IMAGE_NAME"'
-
-                    echo 'Running unit tests...'
-
-                    sh 'docker run --rm "$IMAGE_NAME" python -m unittest discover -s tests'
-
-                    sh 'docker logout'
                 }
             }
         }
 
-        stage('Deploy') {
+        // STAGE 4: DOCKER PUSH
+        stage('Docker Push') {
             steps {
-                echo 'Deploying application...'
+                echo 'Authenticating with Docker Hub and pushing image...'
 
                 withCredentials([
                     usernamePassword(
@@ -61,20 +68,64 @@ pipeline {
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
                 ]) {
-                    script {
-                        env.IMAGE_NAME = "${DOCKER_USERNAME}/python-automation-program:latest"
-                    }
-
                     sh '''
-                        docker rm -f python-automation-container || true
+                        set -e
 
-                        docker run -d \
-                            --name python-automation-container \
-                            -p 5000:5000 \
-                            "$IMAGE_NAME"
+                        trap 'docker logout >/dev/null 2>&1 || true' EXIT
+
+                        echo "$DOCKER_PASSWORD" | docker login \
+                            -u "$DOCKER_USERNAME" --password-stdin
+
+                        docker push "$DOCKER_USERNAME/$IMAGE_REPO:latest"
+
+                        docker push "$DOCKER_USERNAME/$IMAGE_REPO:$BUILD_NUMBER"
                     '''
                 }
             }
+        }
+
+        // STAGE 5: DEPLOY
+        stage('Deploy') {
+            steps {
+                echo 'Deploying Docker container...'
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+                    sh '''
+                        set -e
+
+                        docker pull "$DOCKER_USERNAME/$IMAGE_REPO:latest"
+
+                        docker rm -f "$CONTAINER_NAME" || true
+
+                        docker run -d \
+                            --name "$CONTAINER_NAME" \
+                            --restart unless-stopped \
+                            "$DOCKER_USERNAME/$IMAGE_REPO:latest"
+
+                        docker ps
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'CI/CD Pipeline completed successfully!'
+        }
+
+        failure {
+            echo 'Pipeline failed. Check the console output.'
+        }
+
+        always {
+            echo 'Pipeline execution finished.'
         }
     }
 }
