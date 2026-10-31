@@ -22,8 +22,11 @@ stages {
 
     stage('Unit Testing') {
         steps {
-            echo 'Running Python unit tests...'
+            echo 'Installing python dependencies...'
             sh '''
+                python3 -m pip install --user -t requirements.txt
+                
+                echo "Running python unit tests......."
                 python3 -m unittest discover -s . -p "test_*.py" -v
             '''
         }
