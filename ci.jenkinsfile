@@ -29,7 +29,6 @@ pipeline {
                 echo 'Running Python unit tests...'
 
                 sh '''
-                    python3 --version
                     python3 -m unittest discover -s . -p "test_*.py" -v
                 '''
             }
