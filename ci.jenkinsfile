@@ -1,7 +1,6 @@
 pipeline {
 agent any
 
-```
 options {
     skipDefaultCheckout(true)
     timeout(time: 30, unit: 'MINUTES')
@@ -144,6 +143,5 @@ post {
         echo 'Pipeline execution finished.'
     }
 }
-```
 
 }
