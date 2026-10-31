@@ -1,71 +1,88 @@
 pipeline {
-
     agent any
 
+    options {
+        timeout(time: 15, unit: 'MINUTES')
+    }
+
     environment {
-        DOCKER_IMAGE = "nagababudock123/python-automation-program:latest"
-        CONTAINER_NAME = "python-automation-container"
+        IMAGE_REPO = 'python-automation-program'
+        CONTAINER_NAME = 'python-automation-container'
+        APP_PORT = '5000'
     }
 
     stages {
 
-        stage('Pull Docker Image') {
+        stage('Deploy Application') {
             steps {
-                echo 'Pulling image from Docker Hub'
+                echo 'Starting deployment on EC2...'
 
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'dockerhub-credentials',
-                        usernameVariable: 'DOCKER_USER',
+                        usernameVariable: 'DOCKER_USERNAME',
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
                 ]) {
                     sh '''
-                        echo "$DOCKER_PASSWORD" | docker login \
-                        -u "$DOCKER_USER" --password-stdin
+                        set -e
 
-                        docker pull $DOCKER_IMAGE
+                        IMAGE="$DOCKER_USERNAME/$IMAGE_REPO:latest"
+
+                        echo "Logging into Docker Hub..."
+
+                        echo "$DOCKER_PASSWORD" | docker login \
+                            -u "$DOCKER_USERNAME" \
+                            --password-stdin
+
+                        trap 'docker logout >/dev/null 2>&1 || true' EXIT
+
+                        echo "Pulling latest Docker image..."
+
+                        docker pull "$IMAGE"
+
+                        echo "Removing old container..."
+
+                        docker rm -f "$CONTAINER_NAME" || true
+
+                        echo "Starting new container..."
+
+                        docker run -d \
+                            --name "$CONTAINER_NAME" \
+                            --restart unless-stopped \
+                            -p "$APP_PORT:5000" \
+                            "$IMAGE"
+
+                        echo "Waiting for application startup..."
+
+                        sleep 5
+
+                        echo "Checking container status..."
+
+                        docker ps --filter "name=$CONTAINER_NAME"
+
+                        echo "Testing application..."
+
+                        python3 -c "import urllib.request; print(urllib.request.urlopen('http://localhost:5000/').read().decode())"
+
+                        echo "Deployment completed successfully!"
                     '''
                 }
-            }
-        }
-
-        stage('Stop Existing Container') {
-            steps {
-                sh '''
-                    docker stop $CONTAINER_NAME || true
-                    docker rm $CONTAINER_NAME || true
-                '''
-            }
-        }
-
-        stage('Deploy Application') {
-            steps {
-                sh '''
-                    docker run -d \
-                    --name $CONTAINER_NAME \
-                    $DOCKER_IMAGE
-                '''
-            }
-        }
-
-        stage('Verify Deployment') {
-            steps {
-                sh '''
-                    docker ps
-                    docker logs --tail 20 $CONTAINER_NAME
-                '''
             }
         }
     }
 
     post {
         success {
-            echo 'CD Pipeline Successfully Completed!'
+            echo 'CD Pipeline: Deployment Successful!'
         }
 
         failure {
-            echo 'CD Pipeline Failed!'
+            echo 'CD Pipeline: Deployment Failed. Check Console Output.'
+        }
+
+        always {
+            echo 'CD Pipeline execution finished.'
         }
     }
 }
