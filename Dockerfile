@@ -1,11 +1,13 @@
-# use the official python image
 FROM python:3.12-slim
 
-# set the working directory in the container
 WORKDIR /app
 
-# copy appliation files to the container
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY app.py .
 
-# run the application
+EXPOSE 5000
+
 CMD ["python", "app.py"]
