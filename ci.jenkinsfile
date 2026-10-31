@@ -17,16 +17,17 @@ stages {
     stage('Checkout') {
         steps {
             echo 'Checking out source code...'
-
             git branch: 'main', url: "${GIT_REPO}"
         }
     }
 
     stage('Unit Testing') {
         steps {
-            echo 'Installing dependencies and running Python tests...'
+            echo 'Installing dependencies and running Python unit tests...'
 
             sh '''
+                set -e
+
                 docker run --rm \
                     -v "$WORKSPACE:/app" \
                     -w /app \
@@ -48,6 +49,8 @@ stages {
                 )
             ]) {
                 sh '''
+                    set -e
+
                     docker build \
                         -t "$DOCKER_USERNAME/$IMAGE_REPO:latest" \
                         -t "$DOCKER_USERNAME/$IMAGE_REPO:$BUILD_NUMBER" .
@@ -58,7 +61,7 @@ stages {
 
     stage('Docker Push') {
         steps {
-            echo 'Pushing images to Docker Hub...'
+            echo 'Pushing Docker images to Docker Hub...'
 
             withCredentials([
                 usernamePassword(
@@ -112,17 +115,15 @@ stages {
                         -p 5000:5000 \
                         "$DOCKER_USERNAME/$IMAGE_REPO:latest"
 
-                    echo "Checking container status..."
+                    echo "Verifying deployment..."
 
                     docker ps
 
-                    echo "Checking port mapping..."
-
                     docker port "$CONTAINER_NAME"
 
-                    echo "Checking application logs..."
-
                     docker logs --tail 20 "$CONTAINER_NAME"
+
+                    echo "Deployment completed."
                 '''
             }
         }
@@ -132,7 +133,7 @@ stages {
 post {
     success {
         echo 'CI/CD Pipeline completed successfully!'
-        echo 'Application deployed successfully on EC2.'
+        echo 'Application deployed on EC2.'
     }
 
     failure {
