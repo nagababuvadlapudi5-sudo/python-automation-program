@@ -1,6 +1,4 @@
 pipeline {
-
-```
 agent any
 
 options {
@@ -15,28 +13,22 @@ environment {
 }
 
 stages {
-
-    // STAGE 1: CHECKOUT
     stage('Checkout') {
         steps {
-            echo 'Checking out GitHub repository...'
-
+            echo 'Checking out source code...'
             git branch: 'main', url: "${GIT_REPO}"
         }
     }
 
-    // STAGE 2: UNIT TESTING
     stage('Unit Testing') {
         steps {
             echo 'Running Python unit tests...'
-
             sh '''
                 python3 -m unittest discover -s . -p "test_*.py" -v
             '''
         }
     }
 
-    // STAGE 3: DOCKER BUILD
     stage('Docker Build') {
         steps {
             echo 'Building Docker image...'
@@ -57,10 +49,9 @@ stages {
         }
     }
 
-    // STAGE 4: DOCKER PUSH
     stage('Docker Push') {
         steps {
-            echo 'Authenticating with Docker Hub and pushing image...'
+            echo 'Pushing Docker image to Docker Hub...'
 
             withCredentials([
                 usernamePassword(
@@ -71,24 +62,21 @@ stages {
             ]) {
                 sh '''
                     set -e
-
-                    trap 'docker logout >/dev/null 2>&1 || true' EXIT
-
                     echo "$DOCKER_PASSWORD" | docker login \
                         -u "$DOCKER_USERNAME" --password-stdin
 
                     docker push "$DOCKER_USERNAME/$IMAGE_REPO:latest"
-
                     docker push "$DOCKER_USERNAME/$IMAGE_REPO:$BUILD_NUMBER"
+
+                    docker logout
                 '''
             }
         }
     }
 
-    // STAGE 5: DEPLOY
     stage('Deploy') {
         steps {
-            echo 'Deploying Docker container on EC2...'
+            echo 'Deploying application on EC2...'
 
             withCredentials([
                 usernamePassword(
@@ -99,19 +87,13 @@ stages {
             ]) {
                 sh '''
                     set -e
-
-                    echo "Pulling latest Docker image..."
 
                     echo "$DOCKER_PASSWORD" | docker login \
                         -u "$DOCKER_USERNAME" --password-stdin
 
                     docker pull "$DOCKER_USERNAME/$IMAGE_REPO:latest"
 
-                    echo "Removing old container..."
-
                     docker rm -f "$CONTAINER_NAME" || true
-
-                    echo "Starting new container..."
 
                     docker run -d \
                         --name "$CONTAINER_NAME" \
@@ -119,16 +101,8 @@ stages {
                         -p 5000:5000 \
                         "$DOCKER_USERNAME/$IMAGE_REPO:latest"
 
-                    echo "Checking container status..."
-
                     docker ps
-
-                    echo "Checking port mapping..."
-
                     docker port "$CONTAINER_NAME"
-
-                    echo "Checking application logs..."
-
                     docker logs --tail 20 "$CONTAINER_NAME"
 
                     docker logout
@@ -140,18 +114,17 @@ stages {
 
 post {
     success {
-        echo 'CI/CD Pipeline completed successfully!'
-        echo 'Application deployed on AWS EC2.'
+        echo 'CI/CD pipeline completed successfully!'
     }
 
     failure {
-        echo 'Pipeline failed. Check the console output.'
+        echo 'CI/CD pipeline failed. Check console output.'
     }
 
     always {
         echo 'Pipeline execution finished.'
     }
 }
-```
+
 
 }
