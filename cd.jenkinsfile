@@ -1,0 +1,71 @@
+pipeline {
+
+    agent any
+
+    environment {
+        DOCKER_IMAGE = "nagababudock123/python-automation-program:latest"
+        CONTAINER_NAME = "python-automation-container"
+    }
+
+    stages {
+
+        stage('Pull Docker Image') {
+            steps {
+                echo 'Pulling image from Docker Hub'
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+                    sh '''
+                        echo "$DOCKER_PASSWORD" | docker login \
+                        -u "$DOCKER_USER" --password-stdin
+
+                        docker pull $DOCKER_IMAGE
+                    '''
+                }
+            }
+        }
+
+        stage('Stop Existing Container') {
+            steps {
+                sh '''
+                    docker stop $CONTAINER_NAME || true
+                    docker rm $CONTAINER_NAME || true
+                '''
+            }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                sh '''
+                    docker run -d \
+                    --name $CONTAINER_NAME \
+                    $DOCKER_IMAGE
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh '''
+                    docker ps
+                    docker logs --tail 20 $CONTAINER_NAME
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'CD Pipeline Successfully Completed!'
+        }
+
+        failure {
+            echo 'CD Pipeline Failed!'
+        }
+    }
+}
